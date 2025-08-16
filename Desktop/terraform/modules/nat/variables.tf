@@ -1,10 +1,15 @@
-variable "name" { type = string }
+variable "name" {
+  description = "리소스 이름 prefix"
+  type        = string
+}
 
 variable "public_subnet_id" {
-  type = string
+  description = "NAT을 배치할 퍼블릭 서브넷 ID"
+  type        = string
 }
 
 variable "tags" {
-  type    = map(string)
-  default = {}
+  description = "공통 태그"
+  type        = map(string)
+  default     = {}
 }

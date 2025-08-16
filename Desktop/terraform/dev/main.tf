@@ -1,7 +1,7 @@
 locals {
   tags = {
     Project = var.project
-    Env     = "dev"
+    Env     = var.env
   }
 
   public_names = ["${var.project}-public-a", "${var.project}-public-c"]
@@ -48,7 +48,7 @@ module "subnets" {
 module "nat" {
   source           = "../modules/nat"
   name             = var.project
-  public_subnet_id = module.subnets.public_subnet_ids[0] # public-a
+  public_subnet_id = module.subnets.public_subnet_ids[0]
   tags             = local.tags
 }
 
@@ -73,8 +73,88 @@ module "rds_subnet_group" {
   tags          = local.tags
 }
 
-output "vpc_id" { value = module.vpc.vpc_id }
-output "public_subnets" { value = module.subnets.public_subnet_ids }
-output "private_app_subnets" { value = module.subnets.app_subnet_ids }
-output "private_db_subnets" { value = module.subnets.db_subnet_ids }
-output "rds_subnet_group_id" { value = module.rds_subnet_group.id }
+# 6) ECR (+ GitHub OIDC Role)
+module "ecr" {
+  source = "../modules/ecr"
+
+  project      = var.project
+  repositories = [
+    "auth-service",
+    "exchange-service",
+    "stock-service",
+    "weather-service",
+    "airquality-service",
+    "news-service",
+    "dashboard-aggregator",
+    "sentiment-service"
+  ]
+
+  # 이미지 정리 정책
+  untagged_expire_days = 7
+  keep_last_images     = 20
+  force_delete         = false
+
+  # GitHub OIDC
+  enable_github_oidc = true
+  github_org         = "Son-github"
+  github_repo        = "dailybriefing"
+  allowed_branches   = ["main"]
+  github_role_name   = "${var.project}-gha-ecr-push"
+
+  tags = local.tags
+}
+
+# 7) (선택) VPC Interface Endpoints — ECR API / DKR
+resource "aws_security_group" "vpce_sg" {
+  name        = "${var.project}-vpce-sg"
+  description = "VPC endpoints SG (443)"
+  vpc_id      = module.vpc.vpc_id
+  tags        = local.tags
+
+  ingress {
+    description = "HTTPS from VPC"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr] # 운영은 소스 SG로 좁히기 권장
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_vpc_endpoint" "ecr_api" {
+  vpc_id              = module.vpc.vpc_id
+  service_name        = "com.amazonaws.${var.region}.ecr.api"   # ← 변경
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = module.subnets.app_subnet_ids
+  security_group_ids  = [aws_security_group.vpce_sg.id]
+  private_dns_enabled = true
+  tags                = merge(local.tags, { Name = "${var.project}-vpce-ecr-api" })
+}
+
+resource "aws_vpc_endpoint" "ecr_dkr" {
+  vpc_id              = module.vpc.vpc_id
+  service_name        = "com.amazonaws.${var.region}.ecr.dkr"   # ← 변경
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = module.subnets.app_subnet_ids
+  security_group_ids  = [aws_security_group.vpce_sg.id]
+  private_dns_enabled = true
+  tags                = merge(local.tags, { Name = "${var.project}-vpce-ecr-dkr" })
+}
+
+# (선택) S3 Gateway Endpoint — 프라이빗에서 ECR layer 접근 비용 추가 절감
+# resource "aws_vpc_endpoint" "s3" {
+#   vpc_id            = module.vpc.vpc_id
+#   service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
+#   vpc_endpoint_type = "Gateway"
+#   route_table_ids   = concat(
+#     module.routes.app_route_table_ids,
+#     module.routes.db_route_table_ids
+#   )
+#   tags = merge(local.tags, { Name = "${var.project}-vpce-s3" })
+# }

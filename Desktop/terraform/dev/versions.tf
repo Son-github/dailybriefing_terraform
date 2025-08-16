@@ -1,9 +1,18 @@
 terraform {
-  required_version = ">= 0.12.0, < 2.0.0" # 구버전도 통과하도록 완화
+  required_version = ">= 1.6.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 3.0" # 0.12와 잘 맞는 안정 구간
+      version = ">= 5.50.0"
     }
   }
+
+  # (옵션) backend "s3" {
+  #   bucket         = "your-tf-state-bucket"
+  #   key            = "dailybriefing/dev/terraform.tfstate"
+  #   region         = "ap-northeast-2"
+  #   encrypt        = true
+  #   dynamodb_table = "tf-lock"
+  # }
 }

@@ -1,4 +1,13 @@
 provider "aws" {
-  region  = "ap-northeast-2"
-  profile = "dailybriefing"
+  region = var.region
+
+  default_tags {
+    tags = {
+      Project = var.project
+      Env     = var.env
+    }
+  }
 }
+
+data "aws_region" "current" {}
+
