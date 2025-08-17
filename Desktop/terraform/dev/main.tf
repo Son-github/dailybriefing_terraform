@@ -81,12 +81,10 @@ module "ecr" {
   repositories = [
     "auth-service",
     "exchange-service",
-    "stock-service",
     "weather-service",
-    "airquality-service",
     "news-service",
-    "dashboard-aggregator",
-    "sentiment-service"
+    "news-sentiment",
+    "frontend"
   ]
 
   # 이미지 정리 정책
