@@ -1,15 +1,10 @@
-variable "name" {
-  description = "리소스 이름 prefix"
-  type        = string
-}
-
-variable "public_subnet_id" {
-  description = "NAT을 배치할 퍼블릭 서브넷 ID"
-  type        = string
-}
-
-variable "tags" {
-  description = "공통 태그"
-  type        = map(string)
-  default     = {}
-}
+variable "name" {}
+variable "vpc_cidr" {}
+variable "az_a" {}
+variable "az_c" {}
+variable "public_a_cidr" {}
+variable "public_c_cidr" {}
+variable "app_a_cidr" {}
+variable "db_a_cidr" {}
+variable "db_c_cidr" {}
+variable "enable_vpc_endpoints" { type = bool, default = false }
