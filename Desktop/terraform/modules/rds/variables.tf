@@ -1,10 +1,29 @@
-variable "name" {}
-variable "vpc_id" {}
+variable "name"          { type = string }
+variable "vpc_id"        { type = string }
 variable "db_subnet_ids" { type = list(string) }
-variable "db_sg_id" {}
-variable "username" {}
-variable "password" { sensitive = true }
-variable "db_name" { default = "dashboard" }
-variable "instance_class" { default = "db.t4g.micro" }
-variable "allocated_storage" { default = 20 }
-variable "engine_version" { default = "15.5" }
+variable "username"      { type = string }
+
+variable "password" {
+  type      = string
+  sensitive = true
+}
+
+variable "db_name" {
+  type    = string
+  default = "dashboard"
+}
+
+variable "instance_class" {
+  type    = string
+  default = "db.t4g.micro"
+}
+
+variable "allocated_storage" {
+  type    = number
+  default = 20
+}
+
+variable "engine_version" {
+  type    = string
+  default = "15.5"
+}

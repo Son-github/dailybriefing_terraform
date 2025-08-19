@@ -1,29 +1,22 @@
-variable "name" {}
-variable "cluster_name" {}
-variable "vpc_id" {}
-variable "private_subnets" { type = list(string) }
-variable "alb_sg_id" {}
-variable "http_listener_arn" {}
-variable "https_listener_arn" { default = null }
-variable "target_group_vpc_id" {}
-variable "db_sg_id" {}
+variable "name"         { type = string }
+variable "cluster_name" { type = string }
+variable "vpc_id"       { type = string }
+
+# 단일 AZ이지만, 인터페이스 통일성을 위해 list(string)
+variable "ecs_subnet_ids" { type = list(string) }
+
+# RDS 모듈에서 나온 DB SG (5432 인바운드 허용 대상)
+variable "db_sg_id" { type = string }
 
 variable "services" {
   type = list(object({
-    name           : string
-    image          : string
-    container_port : number
-    path           : string
-    desired_count  : number
-    cpu            : number
-    memory         : number
-    health_path    : string
-    env            : map(string)
+    name           = string
+    image          = string
+    container_port = number
+    desired_count  = number
+    cpu            = number
+    memory         = number
+    env            = map(string)
+    health_path    = optional(string)
   }))
-}
-
-variable "ssm_parameter_paths" {
-  description = "ECS가 읽어야할 SSM 파라미터 이름들(정확 경로)"
-  type        = list(string)
-  default     = []
 }
