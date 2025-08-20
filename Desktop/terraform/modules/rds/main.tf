@@ -1,40 +1,32 @@
-# DB SG (인바운드는 ECS 모듈에서 서비스 SG별로 추가)
-resource "aws_security_group" "db" {
-  name   = "${var.name}-db-sg"
-  vpc_id = var.vpc_id
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = { Name = "${var.name}-db-sg" }
+resource "aws_db_subnet_group" "rds_subnet_group" {
+  name       = "${var.name}-rds-subnet-group"
+  subnet_ids = var.private_subnet_db_ids
+  tags       = { Name = "${var.name}-rds-subnet-group" }
 }
 
-resource "aws_db_subnet_group" "this" {
-  name       = "${var.name}-db-subnet-group"
-  subnet_ids = var.db_subnet_ids
-}
+resource "aws_db_instance" "rds" {
+  identifier     = "${var.name}-rds"
+  engine         = var.engine
+  engine_version = var.engine_version
 
-resource "aws_db_instance" "this" {
-  identifier              = "${var.name}-pg"
-  engine                  = "postgres"
-  engine_version          = var.engine_version
-  instance_class          = var.instance_class
-  username                = var.username
-  password                = var.password
-  db_name                 = var.db_name
-  allocated_storage       = var.allocated_storage
-  storage_encrypted       = false
+  instance_class    = var.instance_class
+  allocated_storage = var.allocated_storage
+  storage_encrypted = var.storage_encrypted
 
-  db_subnet_group_name    = aws_db_subnet_group.this.name
-  vpc_security_group_ids  = [aws_security_group.db.id]
+  username = var.db_username
+  password = var.db_password          # ★ 항상 이 값 사용
+  # manage_master_user_password 속성 자체를 쓰지 않음 (충돌 방지)
 
-  backup_retention_period = 0
-  multi_az                = false
-  publicly_accessible     = false
-  skip_final_snapshot     = true
-  deletion_protection     = false
+  db_name                = var.db_name
+  db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
+  vpc_security_group_ids = [var.rds_sg_id]
+  publicly_accessible    = var.publicly_accessible
+  multi_az               = var.multi_az
+
+  backup_retention_period = var.backup_retention_period
+  deletion_protection     = var.deletion_protection
+  apply_immediately       = var.apply_immediately
+  skip_final_snapshot     = var.skip_final_snapshot
+
+  tags = { Name = "${var.name}-rds" }
 }

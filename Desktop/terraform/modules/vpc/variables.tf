@@ -16,3 +16,30 @@ variable "enable_vpc_endpoints" {
   type    = bool
   default = false
 }
+
+# ... (기존 변수들 위/아래 유지)
+
+# SG 번들 생성 토글
+variable "create_sg_bundle" {
+  type    = bool
+  default = true
+}
+
+# ALB 인바운드 허용 CIDR (기본: 전체)
+variable "alb_ingress_cidrs" {
+  type    = list(string)
+  default = ["0.0.0.0/0"]
+}
+
+# ALB → ECS로 열어줄 애플리케이션 포트 목록 (비우면 규칙 생성 안 함)
+variable "ecs_ingress_from_alb_ports" {
+  type    = list(number)
+  default = []
+}
+
+# DB 포트 (PostgreSQL=5432, MySQL=3306 등)
+variable "db_port" {
+  type    = number
+  default = 5432
+}
+

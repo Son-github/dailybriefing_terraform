@@ -181,3 +181,102 @@ resource "aws_vpc_endpoint" "s3" {
   vpc_endpoint_type = "Gateway"
   route_table_ids   = [aws_route_table.private.id]  # ECS 프라이빗 RT에 연결
 }
+
+# ---------------- Security Groups (ALB/ECS/DB) ----------------
+resource "aws_security_group" "alb" {
+  count = var.create_sg_bundle ? 1 : 0
+
+  name   = "${var.name}-alb-sg"
+  vpc_id = aws_vpc.this.id
+
+  # 80, 443 인바운드
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = var.alb_ingress_cidrs
+    description = "HTTP from allowed CIDRs"
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = var.alb_ingress_cidrs
+    description = "HTTPS from allowed CIDRs"
+  }
+
+  # 아웃바운드 전체 허용
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.name}-alb-sg" }
+}
+
+resource "aws_security_group" "ecs" {
+  count = var.create_sg_bundle ? 1 : 0
+
+  name   = "${var.name}-ecs-sg"
+  vpc_id = aws_vpc.this.id
+
+  # 기본 인바운드 없음 (필요 시 ALB→ECS 규칙 별도 추가)
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.name}-ecs-sg" }
+}
+
+# ALB → ECS 인바운드 (지정 포트만, 비어있으면 생성 안 함)
+resource "aws_security_group_rule" "ecs_from_alb" {
+  # 숫자 리스트 → 키가 문자열인 map 으로 변환
+  for_each = var.create_sg_bundle ? {
+    for p in var.ecs_ingress_from_alb_ports : tostring(p) => p
+  } : {}
+
+  type                     = "ingress"
+  from_port                = each.value
+  to_port                  = each.value
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.ecs[0].id
+  source_security_group_id = aws_security_group.alb[0].id
+  description              = "Allow from ALB to ECS on port ${each.value}"
+}
+
+resource "aws_security_group" "db" {
+  count = var.create_sg_bundle ? 1 : 0
+
+  name   = "${var.name}-db-sg"
+  vpc_id = aws_vpc.this.id
+
+  # 인바운드는 아래 rule에서 ECS SG로 제한
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.name}-db-sg" }
+}
+
+# ECS → DB 인바운드 (기본 5432)
+resource "aws_security_group_rule" "db_from_ecs" {
+  count = var.create_sg_bundle ? 1 : 0
+
+  type                     = "ingress"
+  from_port                = var.db_port
+  to_port                  = var.db_port
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.db[0].id
+  source_security_group_id = aws_security_group.ecs[0].id
+  description              = "Allow DB port ${var.db_port} from ECS SG"
+}
+

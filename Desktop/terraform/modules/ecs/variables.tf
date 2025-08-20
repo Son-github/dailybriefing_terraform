@@ -1,13 +1,43 @@
-variable "name"         { type = string }                 # 접두사
-variable "cluster_name" { type = string }
-variable "vpc_id"       { type = string }
-variable "ecs_subnet_ids" { type = list(string) }         # 프라이빗 서브넷 IDs
-variable "cloudwatch_retention_days" { type = number, default = 14 }
+variable "name" {
+  description = "Name prefix for ECS resources"
+  type        = string
+}
 
-# RDS(Postgres) SG에 5432 인바운드 허용: 빈 문자열이면 생략
-variable "db_sg_id" { type = string, default = "" }
+variable "cluster_name" {
+  description = "ECS cluster name"
+  type        = string
+}
 
-# 서비스 스펙
+variable "vpc_id" {
+  description = "VPC ID"
+  type        = string
+}
+
+variable "ecs_subnet_ids" {
+  description = "Private subnet IDs for ECS tasks"
+  type        = list(string)
+}
+
+# DB SG가 준비되기 전에도 모듈이 돌아가도록 기본값은 빈 문자열
+variable "db_sg_id" {
+  description = "RDS/PostgreSQL security group ID (5432 will be opened from ECS SG). Leave empty to skip."
+  type        = string
+  default     = ""
+}
+
+variable "cloudwatch_retention_days" {
+  description = "CloudWatch log retention (days)"
+  type        = number
+  default     = 14
+}
+
+variable "cpu_architecture" {
+  description = "Task CPU architecture (X86_64 or ARM64)"
+  type        = string
+  default     = "X86_64"
+}
+
+# ★ 에러 최소화를 위해 map(object) 사용. 키가 서비스명
 variable "services" {
   description = "Fargate services keyed by service name"
   type = map(object({
@@ -17,11 +47,5 @@ variable "services" {
     cpu            = number
     memory         = number
     env            = map(string)
-    path           = string   # ALB 안 쓰면 ""로 전달
   }))
 }
-
-# --- (옵션) ALB 연동 ---
-variable "enable_alb" { type = bool, default = false }
-variable "alb_listener_arn" { type = string, default = "" } # HTTPS or HTTP
-variable "alb_sg_id"       { type = string, default = "" }  # ALB SG에서만 인바운드 허용
