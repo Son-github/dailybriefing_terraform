@@ -1,22 +1,27 @@
-variable "name"         { type = string }
+variable "name"         { type = string }                 # 접두사
 variable "cluster_name" { type = string }
 variable "vpc_id"       { type = string }
+variable "ecs_subnet_ids" { type = list(string) }         # 프라이빗 서브넷 IDs
+variable "cloudwatch_retention_days" { type = number, default = 14 }
 
-# 단일 AZ이지만, 인터페이스 통일성을 위해 list(string)
-variable "ecs_subnet_ids" { type = list(string) }
+# RDS(Postgres) SG에 5432 인바운드 허용: 빈 문자열이면 생략
+variable "db_sg_id" { type = string, default = "" }
 
-# RDS 모듈에서 나온 DB SG (5432 인바운드 허용 대상)
-variable "db_sg_id" { type = string }
-
+# 서비스 스펙
 variable "services" {
-  type = list(object({
-    name           = string
+  description = "Fargate services keyed by service name"
+  type = map(object({
     image          = string
     container_port = number
     desired_count  = number
     cpu            = number
     memory         = number
     env            = map(string)
-    health_path    = optional(string)
+    path           = string   # ALB 안 쓰면 ""로 전달
   }))
 }
+
+# --- (옵션) ALB 연동 ---
+variable "enable_alb" { type = bool, default = false }
+variable "alb_listener_arn" { type = string, default = "" } # HTTPS or HTTP
+variable "alb_sg_id"       { type = string, default = "" }  # ALB SG에서만 인바운드 허용
