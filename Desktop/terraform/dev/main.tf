@@ -49,8 +49,8 @@ module "ecs" {
   vpc_id         = module.vpc.vpc_id
   ecs_subnet_ids = [module.vpc.ecs_subnet_id]
 
-  # RDS 모듈 붙여놨으면 db_sg_id 전달, 아니면 생략 가능(빈 기본값)
-  # db_sg_id = try(module.rds.db_sg_id, "")
+  # 🔸 VPC 모듈이 만든 ECS SG 재사용
+  ecs_security_group_id = module.vpc.ecs_sg_id
 
   services = {
     exchange-service = {
@@ -79,4 +79,5 @@ module "ecs" {
     }
   }
 }
+
 
