@@ -1,91 +1,90 @@
-variable "name"                 {
+variable "name" {
   type = string
 }
 
-variable "private_subnet_db_ids"{
-  type = list(string)
+variable "rds_sg_id" {
+  description = "DB Security Group ID"
+  type        = string
 }
 
-variable "rds_sg_id"            {
-  type = string
+# 선호: 새 이름
+variable "db_subnet_ids" {
+  description = "RDS가 사용할 DB 서브넷 ID 목록 (2개 이상 권장)"
+  type        = list(string)
+  default     = []
 }
 
-variable "engine"         {
-  type = string
+# 과거 호환: 예전 이름
+variable "private_subnet_db_ids" {
+  description = "(레거시) db_subnet_ids의 과거 변수명"
+  type        = list(string)
+  default     = []
+}
+
+# 나머지 파라미터들…
+variable "engine" {
+  type    = string
   default = "postgres"
 }
 
-variable "engine_version" {
-  type = string
-  default = "15.5"
-}
+# engine_version는 생략 권장(리전 최신 자동)
+# variable "engine_version" { type = string }
 
-variable "db_name"        {
-  type = string
+variable "db_name" {
+  type    = string
   default = "dashboard"
 }
 
-# ★ 요청대로 고정
 variable "db_username" {
   type    = string
-  default = "admin"
+  default = "appuser"
 }
 
 variable "db_password" {
-  type      = string
-  default   = "11111111"
-  sensitive = true
+  type = string
 }
 
-# ★ 자동 생성/관리 비활성화(항상 우리가 준 비번 사용)
-variable "manage_master_user_password" {
+variable "instance_class" {
+  type    = string
+  default = "db.t4g.micro"
+}
+
+variable "allocated_storage" {
+  type    = number
+  default = 20
+}
+
+variable "storage_encrypted" {
+  type    = bool
+  default = true
+}
+
+variable "publicly_accessible" {
   type    = bool
   default = false
 }
 
-variable "instance_class"        {
-  type = string
-  default = "db.t4g.micro"
+variable "multi_az" {
+  type    = bool
+  default = false
 }
 
-variable "allocated_storage"     {
-  type = number
-  default = 20
-}
-
-variable "storage_encrypted"     {
-  type = bool
-  default = true
-}
-
-variable "backup_retention_period"{
-  type = number
+variable "backup_retention_period" {
+  type    = number
   default = 7
 }
 
-variable "deletion_protection"   {
-  type = bool
-  default = false
-}
-
-variable "apply_immediately"     {
-  type = bool
+variable "apply_immediately" {
+  type    = bool
   default = true
 }
 
-variable "publicly_accessible"   {
-  type = bool
+variable "deletion_protection" {
+  type    = bool
   default = false
 }
 
-variable "multi_az"              {
-  type = bool
-  default = false
-}
-
-variable "skip_final_snapshot"   {
-  type = bool
+variable "skip_final_snapshot" {
+  type    = bool
   default = true
 }
-
-

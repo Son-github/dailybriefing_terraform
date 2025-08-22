@@ -6,7 +6,12 @@ variable "az_a" { type = string }
 variable "az_c" { type = string }
 
 # 서브넷 CIDR
-variable "public_cidr" { type = string } # AZ-a
+variable "public_a_cidr" { type = string } # AZ-a
+variable "public_c_cidr" {
+  description = "퍼블릭 서브넷 CIDR (AZ C, 예: 10.2.10.0/24)"
+  type        = string
+}
+
 variable "ecs_cidr"    { type = string } # AZ-a (ECS)
 variable "db_a_cidr"   { type = string } # AZ-a (DB)
 variable "db_c_cidr"   { type = string } # AZ-c (DB)

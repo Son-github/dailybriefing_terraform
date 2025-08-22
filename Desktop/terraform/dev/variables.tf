@@ -78,3 +78,27 @@ variable "ecs_services" {
     }
   ]
 }
+
+variable "alb_certificate_arn" {
+  description = "ALB용 ACM 인증서 ARN (없으면 null)"
+  type        = string
+  default     = null
+}
+
+variable "frontend_domain" {
+  description = "프런트엔드 도메인 (예: app.example.com) 없으면 null"
+  type        = string
+  default     = null
+}
+
+variable "frontend_hosted_zone_id" {
+  description = "Hosted Zone ID (도메인 사용 시 필요)"
+  type        = string
+  default     = null
+}
+
+variable "frontend_certificate_arn" {
+  description = "us-east-1(버지니아) ACM 인증서 ARN (없으면 기본 인증서)"
+  type        = string
+  default     = null
+}

@@ -1,3 +1,7 @@
+#############################################
+# modules/ecs/main.tf (fixed)
+#############################################
+
 locals {
   svc = var.services
 }
@@ -11,7 +15,6 @@ resource "aws_ecs_cluster" "this" {
 data "aws_iam_policy_document" "assume_task" {
   statement {
     actions = ["sts:AssumeRole"]
-
     principals {
       type        = "Service"
       identifiers = ["ecs-tasks.amazonaws.com"]
@@ -36,32 +39,18 @@ resource "aws_iam_role" "task_role" {
   tags               = { Name = "${var.name}-ecs-task-role" }
 }
 
-# ---------- Networking / Security ----------
-resource "aws_security_group" "ecs" {
-  name   = "${var.name}-ecs-sg"
-  vpc_id = var.vpc_id
-
-  # 인바운드 없음(외부 노출 안함). 아웃바운드만 허용 → NAT 통해 외부 OpenAPI 호출 가능
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = { Name = "${var.name}-ecs-sg" }
-}
-
-# DB 인바운드: ECS SG -> DB SG (5432) — db_sg_id가 비어있으면 스킵
+# ---------- (중요) SG는 VPC 모듈에서 생성/전달 ----------
+# - 이 모듈은 SG를 생성하지 않음
+# - DB 인바운드(5432)만, 외부에서 받은 SG ID로 연결
 resource "aws_security_group_rule" "db_ingress_from_ecs" {
-  count                   = length(var.db_sg_id) > 0 ? 1 : 0
-  type                    = "ingress"
-  from_port               = 5432
-  to_port                 = 5432
-  protocol                = "tcp"
-  security_group_id       = var.db_sg_id
-  source_security_group_id= aws_security_group.ecs.id
-  description             = "Allow Postgres from ECS services"
+  count                    = var.db_sg_id != "" ? 1 : 0
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = var.db_sg_id                # DB SG
+  source_security_group_id = var.ecs_security_group_id   # ECS SG (전달받은 값)
+  description              = "Allow Postgres from ECS services"
 }
 
 # ---------- Logs ----------
@@ -90,35 +79,28 @@ resource "aws_ecs_task_definition" "svc" {
     cpu_architecture        = var.cpu_architecture
   }
 
-  container_definitions = jsonencode([
-    {
-      name      = each.key
-      image     = each.value.image
-      essential = true
-
-      portMappings = [{
-        containerPort = tonumber(each.value.container_port)
-        hostPort      = tonumber(each.value.container_port)   # Fargate는 동일해야 함
-        protocol      = "tcp"
-      }]
-
-      environment = [
-        for k, v in each.value.env : { name = k, value = v }
-      ]
-
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.svc[each.key].name
-          awslogs-region        = data.aws_region.current.name
-          awslogs-stream-prefix = each.key
-        }
+  container_definitions = jsonencode([{
+    name      = each.key
+    image     = each.value.image
+    essential = true
+    portMappings = [{
+      containerPort = tonumber(each.value.container_port)
+      hostPort      = tonumber(each.value.container_port)
+      protocol      = "tcp"
+    }]
+    environment = [for k, v in each.value.env : { name = k, value = v }]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        awslogs-group         = aws_cloudwatch_log_group.svc[each.key].name
+        awslogs-region        = data.aws_region.current.name
+        awslogs-stream-prefix = each.key
       }
     }
-  ])
+  }])
 }
 
-# ---------- Services ----------
+# ---------- Services (단일 선언만 유지) ----------
 resource "aws_ecs_service" "svc" {
   for_each             = local.svc
   name                 = each.key
@@ -130,11 +112,22 @@ resource "aws_ecs_service" "svc" {
 
   network_configuration {
     subnets          = var.ecs_subnet_ids
-    security_groups  = [aws_security_group.ecs.id]
+    security_groups  = [var.ecs_security_group_id]   # VPC 모듈에서 전달받은 ECS SG 사용
     assign_public_ip = false
+  }
+
+  # ALB Target Group 매핑(있을 때만)
+  dynamic "load_balancer" {
+    for_each = lookup(var.target_group_arns, each.key, null) == null ? [] : [1]
+    content {
+      target_group_arn = var.target_group_arns[each.key]
+      container_name   = each.key
+      container_port   = tonumber(each.value.container_port)
+    }
   }
 
   lifecycle {
     ignore_changes = [desired_count]
   }
 }
+

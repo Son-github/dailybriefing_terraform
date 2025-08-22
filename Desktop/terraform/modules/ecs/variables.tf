@@ -49,3 +49,16 @@ variable "services" {
     env            = map(string)
   }))
 }
+
+# ALB의 TG를 주입받아 ECS 서비스와 연결 (선택)
+variable "target_group_arns" {
+  description = "서비스명 → Target Group ARN 매핑 (있으면 ALB에 연결)"
+  type        = map(string)
+  default     = {}
+}
+
+variable "ecs_security_group_id" {
+  description = "VPC 모듈이 생성한 ECS SG ID"
+  type        = string
+}
+
