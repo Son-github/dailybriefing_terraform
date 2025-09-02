@@ -2,33 +2,13 @@ variable "name" {
   type = string
 }
 
-variable "rds_sg_id" {
-  description = "DB Security Group ID"
-  type        = string
-}
-
-# 선호: 새 이름
 variable "db_subnet_ids" {
-  description = "RDS가 사용할 DB 서브넷 ID 목록 (2개 이상 권장)"
-  type        = list(string)
-  default     = []
+  type = list(string)
 }
 
-# 과거 호환: 예전 이름
-variable "private_subnet_db_ids" {
-  description = "(레거시) db_subnet_ids의 과거 변수명"
-  type        = list(string)
-  default     = []
+variable "rds_sg_id" {
+  type = string
 }
-
-# 나머지 파라미터들…
-variable "engine" {
-  type    = string
-  default = "postgres"
-}
-
-# engine_version는 생략 권장(리전 최신 자동)
-# variable "engine_version" { type = string }
 
 variable "db_name" {
   type    = string

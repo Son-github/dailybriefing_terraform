@@ -1,45 +1,39 @@
 variable "name" {
-  description = "Name prefix for ECS resources"
-  type        = string
+  type = string
 }
 
 variable "cluster_name" {
-  description = "ECS cluster name"
-  type        = string
+  type = string
 }
 
 variable "vpc_id" {
-  description = "VPC ID"
-  type        = string
+  type = string
 }
 
 variable "ecs_subnet_ids" {
-  description = "Private subnet IDs for ECS tasks"
-  type        = list(string)
+  type = list(string)
 }
 
-# DB SG가 준비되기 전에도 모듈이 돌아가도록 기본값은 빈 문자열
+variable "ecs_security_group_id" {
+  type = string
+}
+
 variable "db_sg_id" {
-  description = "RDS/PostgreSQL security group ID (5432 will be opened from ECS SG). Leave empty to skip."
-  type        = string
-  default     = ""
-}
-
-variable "cloudwatch_retention_days" {
-  description = "CloudWatch log retention (days)"
-  type        = number
-  default     = 14
+  type    = string
+  default = ""
 }
 
 variable "cpu_architecture" {
-  description = "Task CPU architecture (X86_64 or ARM64)"
-  type        = string
-  default     = "X86_64"
+  type    = string
+  default = "X86_64"
 }
 
-# ★ 에러 최소화를 위해 map(object) 사용. 키가 서비스명
+variable "cloudwatch_retention_days" {
+  type    = number
+  default = 14
+}
+
 variable "services" {
-  description = "Fargate services keyed by service name"
   type = map(object({
     image          = string
     container_port = number
@@ -50,15 +44,26 @@ variable "services" {
   }))
 }
 
-# ALB의 TG를 주입받아 ECS 서비스와 연결 (선택)
 variable "target_group_arns" {
-  description = "서비스명 → Target Group ARN 매핑 (있으면 ALB에 연결)"
+  description = "서비스명 -> TG ARN (있으면 ALB 연결)"
   type        = map(string)
   default     = {}
 }
 
-variable "ecs_security_group_id" {
-  description = "VPC 모듈이 생성한 ECS SG ID"
-  type        = string
+variable "enable_autoscaling" {
+  type    = bool
+  default = false
 }
 
+variable "autoscaling" {
+  type = object({
+    min_capacity = number
+    max_capacity = number
+    target_cpu   = number
+  })
+  default = {
+    min_capacity = 1
+    max_capacity = 2
+    target_cpu   = 60
+  }
+}

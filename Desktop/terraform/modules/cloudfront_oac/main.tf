@@ -14,9 +14,7 @@ resource "aws_cloudfront_distribution" "cdn" {
   enabled             = true
   price_class         = var.price_class
   default_root_object = var.default_root_object
-  web_acl_id          = var.enable_waf && var.web_acl_arn != null ? var.web_acl_arn : null
 
-  # ✅ origin (단수) 블록을 사용
   origin {
     domain_name              = var.s3_bucket_domain_name
     origin_id                = "s3-${var.s3_bucket_id}"
@@ -26,24 +24,26 @@ resource "aws_cloudfront_distribution" "cdn" {
   default_cache_behavior {
     target_origin_id       = "s3-${var.s3_bucket_id}"
     viewer_protocol_policy = "redirect-to-https"
-
-    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
-    cached_methods   = ["GET", "HEAD", "OPTIONS"]
-    compress         = true
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD", "OPTIONS"]
+    compress               = true
 
     forwarded_values {
       query_string = false
-      cookies { forward = "none" }
+
+      cookies {
+        forward = "none"
+      }
     }
   }
 
-  # SPA 라우팅
   custom_error_response {
     error_code            = 403
     response_page_path    = "/index.html"
     response_code         = 200
     error_caching_min_ttl = 0
   }
+
   custom_error_response {
     error_code            = 404
     response_page_path    = "/index.html"
@@ -52,7 +52,9 @@ resource "aws_cloudfront_distribution" "cdn" {
   }
 
   restrictions {
-    geo_restriction { restriction_type = "none" }
+    geo_restriction {
+      restriction_type = "none"
+    }
   }
 
   viewer_certificate {
@@ -62,10 +64,12 @@ resource "aws_cloudfront_distribution" "cdn" {
     minimum_protocol_version       = "TLSv1.2_2021"
   }
 
-  tags = merge(var.tags, { Name = "${var.name}-cdn" })
+  tags = {
+    Name = "${var.name}-cdn"
+  }
 }
 
-# S3 버킷 정책: CloudFront(OAC)만 접근 가능
+# S3 정책: CloudFront(OAC)만 읽기 허용
 data "aws_iam_policy_document" "site" {
   statement {
     actions   = ["s3:GetObject"]

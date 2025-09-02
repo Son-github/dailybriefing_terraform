@@ -1,26 +1,28 @@
 data "aws_region" "current" {}
+data "aws_partition" "current" {}
 
-# ---------------- VPC ----------------
 resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags = { Name = "${var.name}-vpc" }
+
+  tags = {
+    Name = "${var.name}-vpc"
+  }
 }
 
-# ---------------- Subnets ----------------
+# --- Subnets ---
 resource "aws_subnet" "public_a" {
   vpc_id                  = aws_vpc.this.id
   cidr_block              = var.public_a_cidr
   availability_zone       = var.az_a
   map_public_ip_on_launch = true
-  tags = { Name = "${var.name}-public-a", Tier = "public" }
+  tags = { Name = "${var.name}-public-a" }
 }
 
-# ✅ (신규) Public Subnet C
 resource "aws_subnet" "public_c" {
   vpc_id                  = aws_vpc.this.id
-  cidr_block              = var.public_c_cidr   # ← variables.tf에 추가(예: 10.2.10.0/24)
+  cidr_block              = var.public_c_cidr
   availability_zone       = var.az_c
   map_public_ip_on_launch = true
   tags = { Name = "${var.name}-public-c" }
@@ -30,29 +32,43 @@ resource "aws_subnet" "ecs_a" {
   vpc_id            = aws_vpc.this.id
   cidr_block        = var.ecs_cidr
   availability_zone = var.az_a
-  tags = { Name = "${var.name}-private-ecs-a", Tier = "private-ecs" }
+  tags = { Name = "${var.name}-ecs-a" }
 }
 
 resource "aws_subnet" "db_a" {
   vpc_id            = aws_vpc.this.id
   cidr_block        = var.db_a_cidr
   availability_zone = var.az_a
-  tags = { Name = "${var.name}-private-db-a", Tier = "private-db" }
+  tags = { Name = "${var.name}-db-a" }
 }
 
 resource "aws_subnet" "db_c" {
   vpc_id            = aws_vpc.this.id
   cidr_block        = var.db_c_cidr
   availability_zone = var.az_c
-  tags = { Name = "${var.name}-private-db-c", Tier = "private-db" }
+  tags = { Name = "${var.name}-db-c" }
 }
 
-# ---------------- IGW & Public Route ----------------
+# --- IGW & NAT ---
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.this.id
   tags   = { Name = "${var.name}-igw" }
 }
 
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags   = { Name = "${var.name}-nat-eip" }
+}
+
+resource "aws_nat_gateway" "nat" {
+  allocation_id     = aws_eip.nat.id
+  subnet_id         = aws_subnet.public_a.id
+  connectivity_type = "public"
+  depends_on        = [aws_internet_gateway.igw]
+  tags              = { Name = "${var.name}-nat" }
+}
+
+# --- Routes ---
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
 
@@ -74,25 +90,9 @@ resource "aws_route_table_association" "public_c" {
   route_table_id = aws_route_table.public.id
 }
 
-# ---------------- NAT (Public Subnet에 배치) ----------------
-resource "aws_eip" "nat" {
-  domain = "vpc"
-  tags   = { Name = "${var.name}-nat-eip" }
-}
-
-resource "aws_nat_gateway" "nat" {
-  allocation_id     = aws_eip.nat.id
-  subnet_id         = aws_subnet.public_a.id   # ←★ 퍼블릭 서브넷에 반드시 배치
-  connectivity_type = "public"
-  tags              = { Name = "${var.name}-nat" }
-  depends_on        = [aws_internet_gateway.igw]
-}
-
-# ---------------- Private Route (ECS만 인터넷 아웃바운드) ----------------
-resource "aws_route_table" "private" {
+resource "aws_route_table" "private_ecs" {
   vpc_id = aws_vpc.this.id
 
-  # ECS는 오픈API 호출 등 외부 통신 필요 → NAT 경유
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.nat.id
@@ -103,113 +103,37 @@ resource "aws_route_table" "private" {
 
 resource "aws_route_table_association" "ecs_a" {
   subnet_id      = aws_subnet.ecs_a.id
-  route_table_id = aws_route_table.private.id
+  route_table_id = aws_route_table.private_ecs.id
 }
 
-# ---------------- DB Route (인터넷 경로 없음) ----------------
-resource "aws_route_table" "db" {
+resource "aws_route_table" "private_db" {
   vpc_id = aws_vpc.this.id
-  # 기본 로컬 라우트만 존재 (0.0.0.0/0 추가 금지)
-  tags = { Name = "${var.name}-private-db-rt" }
+  tags   = { Name = "${var.name}-private-db-rt" }
 }
 
 resource "aws_route_table_association" "db_a" {
   subnet_id      = aws_subnet.db_a.id
-  route_table_id = aws_route_table.db.id
+  route_table_id = aws_route_table.private_db.id
 }
 
 resource "aws_route_table_association" "db_c" {
   subnet_id      = aws_subnet.db_c.id
-  route_table_id = aws_route_table.db.id
+  route_table_id = aws_route_table.private_db.id
 }
 
-# ---------------- (옵션) VPC Endpoints: NAT 비용 절감 ----------------
-resource "aws_security_group" "vpce" {
-  count = var.enable_vpc_endpoints ? 1 : 0
-
-  name   = "${var.name}-vpce-sg"
-  vpc_id = aws_vpc.this.id
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = [aws_vpc.this.cidr_block]
-    description = "HTTPS from VPC"
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = { Name = "${var.name}-vpce-sg" }
-}
-
-resource "aws_vpc_endpoint" "ecr_api" {
-  count               = var.enable_vpc_endpoints ? 1 : 0
-  vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.ecr.api"
-  vpc_endpoint_type   = "Interface"
-  private_dns_enabled = true
-  subnet_ids          = [aws_subnet.ecs_a.id]
-  security_group_ids  = [aws_security_group.vpce[0].id]
-}
-
-resource "aws_vpc_endpoint" "ecr_dkr" {
-  count               = var.enable_vpc_endpoints ? 1 : 0
-  vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.ecr.dkr"
-  vpc_endpoint_type   = "Interface"
-  private_dns_enabled = true
-  subnet_ids          = [aws_subnet.ecs_a.id]
-  security_group_ids  = [aws_security_group.vpce[0].id]
-}
-
-resource "aws_vpc_endpoint" "logs" {
-  count               = var.enable_vpc_endpoints ? 1 : 0
-  vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.logs"
-  vpc_endpoint_type   = "Interface"
-  private_dns_enabled = true
-  subnet_ids          = [aws_subnet.ecs_a.id]
-  security_group_ids  = [aws_security_group.vpce[0].id]
-}
-
-resource "aws_vpc_endpoint" "ssm" {
-  count               = var.enable_vpc_endpoints ? 1 : 0
-  vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.${data.aws_region.current.name}.ssm"
-  vpc_endpoint_type   = "Interface"
-  private_dns_enabled = true
-  subnet_ids          = [aws_subnet.ecs_a.id]
-  security_group_ids  = [aws_security_group.vpce[0].id]
-}
-
-resource "aws_vpc_endpoint" "s3" {
-  count             = var.enable_vpc_endpoints ? 1 : 0
-  vpc_id            = aws_vpc.this.id
-  service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
-  vpc_endpoint_type = "Gateway"
-  route_table_ids   = [aws_route_table.private.id]  # ECS 프라이빗 RT에 연결
-}
-
-# ---------------- Security Groups (ALB/ECS/DB) ----------------
+# --- SGs (ALB/ECS/DB) ---
 resource "aws_security_group" "alb" {
   count = var.create_sg_bundle ? 1 : 0
 
   name   = "${var.name}-alb-sg"
   vpc_id = aws_vpc.this.id
 
-  # 80, 443 인바운드
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = var.alb_ingress_cidrs
-    description = "HTTP from allowed CIDRs"
+    description = "HTTP"
   }
 
   ingress {
@@ -217,10 +141,9 @@ resource "aws_security_group" "alb" {
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = var.alb_ingress_cidrs
-    description = "HTTPS from allowed CIDRs"
+    description = "HTTPS"
   }
 
-  # 아웃바운드 전체 허용
   egress {
     from_port   = 0
     to_port     = 0
@@ -237,7 +160,6 @@ resource "aws_security_group" "ecs" {
   name   = "${var.name}-ecs-sg"
   vpc_id = aws_vpc.this.id
 
-  # 기본 인바운드 없음 (필요 시 ALB→ECS 규칙 별도 추가)
   egress {
     from_port   = 0
     to_port     = 0
@@ -248,12 +170,8 @@ resource "aws_security_group" "ecs" {
   tags = { Name = "${var.name}-ecs-sg" }
 }
 
-# ALB → ECS 인바운드 (지정 포트만, 비어있으면 생성 안 함)
 resource "aws_security_group_rule" "ecs_from_alb" {
-  # 숫자 리스트 → 키가 문자열인 map 으로 변환
-  for_each = var.create_sg_bundle ? {
-    for p in var.ecs_ingress_from_alb_ports : tostring(p) => p
-  } : {}
+  for_each = var.create_sg_bundle ? { for p in var.ecs_ingress_from_alb_ports : tostring(p) => p } : {}
 
   type                     = "ingress"
   from_port                = each.value
@@ -261,7 +179,7 @@ resource "aws_security_group_rule" "ecs_from_alb" {
   protocol                 = "tcp"
   security_group_id        = aws_security_group.ecs[0].id
   source_security_group_id = aws_security_group.alb[0].id
-  description              = "Allow from ALB to ECS on port ${each.value}"
+  description              = "ALB to ECS ${each.value}" # '>' 제거
 }
 
 resource "aws_security_group" "db" {
@@ -270,7 +188,6 @@ resource "aws_security_group" "db" {
   name   = "${var.name}-db-sg"
   vpc_id = aws_vpc.this.id
 
-  # 인바운드는 아래 rule에서 ECS SG로 제한
   egress {
     from_port   = 0
     to_port     = 0
@@ -281,7 +198,6 @@ resource "aws_security_group" "db" {
   tags = { Name = "${var.name}-db-sg" }
 }
 
-# ECS → DB 인바운드 (기본 5432)
 resource "aws_security_group_rule" "db_from_ecs" {
   count = var.create_sg_bundle ? 1 : 0
 
@@ -291,6 +207,5 @@ resource "aws_security_group_rule" "db_from_ecs" {
   protocol                 = "tcp"
   security_group_id        = aws_security_group.db[0].id
   source_security_group_id = aws_security_group.ecs[0].id
-  description              = "Allow DB port ${var.db_port} from ECS SG"
+  description              = "ECS to DB ${var.db_port}"  # '>' 제거
 }
-
