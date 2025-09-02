@@ -1,34 +1,23 @@
-# 편의 출력
-output "vpc_id" {
-  value = module.vpc.vpc_id
+output "alb_dns_name" {
+  value = module.alb.alb_dns_name
 }
 
-output "public_subnet_id" {
-  value = module.vpc.public_subnet_id
+output "frontend_cdn_domain" {
+  value = module.cloudfront.distribution_domain_name
 }
 
-output "ecs_subnet_id" {
-  value = module.vpc.ecs_subnet_id
+output "rds_endpoint" {
+  value = module.rds.endpoint
 }
 
-output "db_subnet_ids" {
-  value = module.vpc.db_subnet_ids
-}
-
-output "public_route_table_id" {
-  value = module.vpc.public_route_table_id
-}
-
-output "private_route_table_id" {
-  value = module.vpc.private_route_table_id
-}
-
-output "db_route_table_id" {
-  value = module.vpc.db_route_table_id
-}
-# Outputs
-# output "rds_endpoint" { value = module.rds.db_endpoint }
-# output "db_sg_id" { value = module.rds.db_sg_id }
-output "ecs_cluster" {
+output "ecs_cluster_name" {
   value = module.ecs.cluster_name
+}
+
+# 프론트 배포 편의용
+output "s3_site_bucket_id" {
+  value = module.s3_site.bucket_id
+}
+output "cloudfront_distribution_id" {
+  value = module.cloudfront.distribution_id
 }
