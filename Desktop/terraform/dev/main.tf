@@ -203,13 +203,29 @@ module "cloudfront" {
   s3_bucket_arn         = module.s3_site.bucket_arn
   s3_bucket_domain_name = module.s3_site.bucket_regional_domain_name
 
-  # CF 인증서(us-east-1)
+  # CF 인증서(us-east-1) - 프론트 도메인(CloudFront)용
   certificate_arn       = var.frontend_certificate_arn
   default_root_object   = "index.html"
   price_class           = "PriceClass_200"
 
-  # API 라우팅 활성화
-  enable_api_origin       = true
-  api_origin_domain_name  = module.alb.alb_dns_name   # ← ALB에 80 리스너 열어두면 아래 설정 유지
-  api_origin_protocol_policy = "http-only"            # ALB 443만 쓰면 "https-only"로 바꾸고 api용 커스텀 도메인 권장
+  # ✅ API 라우팅 (CloudFront → ALB: http-only)
+  enable_api_origin          = true
+  api_origin_domain_name     = module.alb.alb_dns_name
+  api_origin_protocol_policy = "http-only"
+
+  # ✅ 프리플라이트/인증 헤더/쿠키/쿼리 전달
+  api_query_string      = true
+  api_forward_cookies   = "all"  # 세션/로그인 대응
+  api_forward_headers   = [
+    "Authorization",
+    "Origin",
+    "Content-Type",
+    "Accept",
+    "X-Requested-With"
+  ]
+
+  # ✅ API 캐시 끄기 (즉시 반영)
+  api_min_ttl     = 0
+  api_default_ttl = 0
+  api_max_ttl     = 0
 }
