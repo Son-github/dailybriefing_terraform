@@ -1,15 +1,17 @@
-output "cluster_name" {
-  value = aws_ecs_cluster.this.name
-}
+# modules/ecs/outputs.tf
 
-output "ecs_security_group_id" {
-  value = var.ecs_security_group_id
+output "cluster_name" {
+  value       = aws_ecs_cluster.this.name
+  description = "ECS cluster name"
 }
 
 output "service_names" {
-  value = keys(var.services)
+  value       = { for k, s in aws_ecs_service.svc : k => s.name }
+  description = "Map of service name key -> ECS service name"
 }
 
-output "task_definition_arns" {
-  value = { for k, td in aws_ecs_task_definition.svc : k => td.arn }
+output "service_ids" {
+  value       = { for k, s in aws_ecs_service.svc : k => s.id }
+  description = "Map of service name key -> ECS service id"
 }
+

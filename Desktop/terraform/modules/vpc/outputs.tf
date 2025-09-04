@@ -12,8 +12,8 @@ output "public_subnet_id" {
   value       = aws_subnet.public_a.id
 }
 
-output "ecs_subnet_id" {
-  value = aws_subnet.ecs_a.id
+output "ecs_subnet_ids"   {
+  value = [aws_subnet.ecs_a.id, aws_subnet.ecs_c.id]
 }
 
 output "db_subnet_ids" {

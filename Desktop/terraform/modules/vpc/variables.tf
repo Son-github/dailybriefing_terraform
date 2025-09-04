@@ -22,9 +22,14 @@ variable "public_c_cidr" {
   type = string
 }
 
-variable "ecs_cidr" {
+variable "ecs_a_cidr"    {
   type = string
 }
+
+# ← 새로 추가 (기존 ecs_cidr를 쓰고 있었다면 이름 맞춰 변경)
+variable "ecs_c_cidr"    {
+  type = string
+} # ← 새로 추가
 
 variable "db_a_cidr" {
   type = string

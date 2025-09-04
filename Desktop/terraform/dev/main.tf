@@ -1,5 +1,9 @@
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 locals {
   name_prefix = var.name_prefix
+  ecr_repo_prefix = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/dailybriefing"
 }
 
 # ---------------- VPC ----------------
@@ -12,18 +16,28 @@ module "vpc" {
   az_a = "ap-northeast-2a"
   az_c = "ap-northeast-2c"
 
+  # Public (ALB)
   public_a_cidr = "10.2.1.0/24"
   public_c_cidr = "10.2.11.0/24"
 
-  ecs_cidr  = "10.2.2.0/24"
+  # ECS Private (2AZ)  👈 기존 ecs_cidr → ecs_a_cidr / ecs_c_cidr 로 분리
+  ecs_a_cidr = "10.2.2.0/24"
+  ecs_c_cidr = "10.2.12.0/24"
+
+  # DB Private (2AZ)
   db_a_cidr = "10.2.3.0/24"
   db_c_cidr = "10.2.4.0/24"
 
+  # (옵션) 모듈 변수에 선언돼 있어야 함. 없다면 이 3개 줄은 지워도 됨.
   enable_vpc_endpoints       = false
   create_sg_bundle           = true
   alb_ingress_cidrs          = ["0.0.0.0/0"]
-  ecs_ingress_from_alb_ports = [8082, 8083, 8084]
-  db_port                    = 5432
+
+  # ALB → ECS 허용 포트
+  ecs_ingress_from_alb_ports = [8081, 8082, 8083, 8084]
+
+  # DB 포트
+  db_port = 5432
 }
 
 # ---------------- ALB ----------------
@@ -41,9 +55,22 @@ module "alb" {
   access_logs_prefix = "alb/"
 
   routes = {
-    exchange-service = { path = "/exchange/*", port = 8082 }
-    weather-service  = { path = "/weather/*",  port = 8083 }
-    news-service     = { path = "/news/*",     port = 8084 }
+    auth-service = {
+      path = "/api/auth/*"
+      port = 8081
+    }
+    exchange-service = {
+      path = "/api/exchange/*"
+      port = 8082
+    }
+    weather-service = {
+      path = "/api/weather/*"
+      port = 8083
+    }
+    news-service = {
+      path = "/api/news/*"
+      port = 8084
+    }
   }
 }
 
@@ -53,37 +80,75 @@ module "ecs" {
 
   name                  = local.name_prefix
   cluster_name          = "${local.name_prefix}-cluster"
+
   vpc_id                = module.vpc.vpc_id
-  ecs_subnet_ids        = [module.vpc.ecs_subnet_id]
+  ecs_subnet_ids        = module.vpc.ecs_subnet_ids          # ✅ 2개 AZ 프라이빗 서브넷
   ecs_security_group_id = module.vpc.ecs_sg_id
-  db_sg_id              = module.vpc.db_sg_id
+  # db_sg_id는 VPC 모듈이 DB SG를 만들고 rule까지 관리하므로 굳이 전달 불필요
 
-  target_group_arns = module.alb.target_group_arns
+  target_group_arns     = module.alb.target_group_arns       # {service = tg_arn}
 
+  # 4개 서비스 모두 DB 연결 ENV 추가
   services = {
+    auth-service = {
+      image          = "${local.ecr_repo_prefix}/auth-service:latest"
+      container_port = 8081
+      desired_count  = 1
+      cpu            = 256
+      memory         = 512
+      env = {
+        SPRING_PROFILES_ACTIVE = "dev"
+        DB_HOST = module.rds.endpoint
+        DB_PORT = "5432"
+        DB_NAME = "dashboard"
+        DB_USER = "appuser"
+        DB_PASS = "11111111"
+      }
+    }
     exchange-service = {
-      image          = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/exchange-service:latest"
+      image          = "${local.ecr_repo_prefix}/exchange-service:latest"
       container_port = 8082
       desired_count  = 1
       cpu            = 256
       memory         = 512
-      env            = { SPRING_PROFILES_ACTIVE = "dev" }
+      env = {
+        SPRING_PROFILES_ACTIVE = "dev"
+        DB_HOST = module.rds.endpoint
+        DB_PORT = "5432"
+        DB_NAME = "dashboard"
+        DB_USER = "appuser"
+        DB_PASS = "11111111"
+      }
     }
     weather-service = {
-      image          = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/weather-service:latest"
+      image          = "${local.ecr_repo_prefix}/weather-service:latest"
       container_port = 8083
       desired_count  = 1
       cpu            = 256
       memory         = 512
-      env            = { SPRING_PROFILES_ACTIVE = "dev" }
+      env = {
+        SPRING_PROFILES_ACTIVE = "dev"
+        DB_HOST = module.rds.endpoint
+        DB_PORT = "5432"
+        DB_NAME = "dashboard"
+        DB_USER = "appuser"
+        DB_PASS = "11111111"
+      }
     }
     news-service = {
-      image          = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/news-service:latest"
+      image          = "${local.ecr_repo_prefix}/news-service:latest"
       container_port = 8084
       desired_count  = 1
       cpu            = 256
       memory         = 512
-      env            = { SPRING_PROFILES_ACTIVE = "dev" }
+      env = {
+        SPRING_PROFILES_ACTIVE = "dev"
+        DB_HOST = module.rds.endpoint
+        DB_PORT = "5432"
+        DB_NAME = "dashboard"
+        DB_USER = "appuser"
+        DB_PASS = "11111111"
+      }
     }
   }
 
@@ -96,6 +161,7 @@ module "ecs" {
 
   depends_on = [module.alb]
 }
+
 
 # ---------------- RDS(Postgres) ----------------
 module "rds" {
@@ -131,10 +197,19 @@ module "s3_site" {
 module "cloudfront" {
   source                = "../modules/cloudfront_oac"
   name                  = local.name_prefix
+
+  # S3
   s3_bucket_id          = module.s3_site.bucket_id
   s3_bucket_arn         = module.s3_site.bucket_arn
   s3_bucket_domain_name = module.s3_site.bucket_regional_domain_name
+
+  # CF 인증서(us-east-1)
   certificate_arn       = var.frontend_certificate_arn
   default_root_object   = "index.html"
   price_class           = "PriceClass_200"
+
+  # API 라우팅 활성화
+  enable_api_origin       = true
+  api_origin_domain_name  = module.alb.alb_dns_name   # ← ALB에 80 리스너 열어두면 아래 설정 유지
+  api_origin_protocol_policy = "http-only"            # ALB 443만 쓰면 "https-only"로 바꾸고 api용 커스텀 도메인 권장
 }
