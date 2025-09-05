@@ -97,14 +97,16 @@ module "ecs" {
       cpu            = 256
       memory         = 512
       env = {
-        SPRING_PROFILES_ACTIVE = "dev"
-        DB_HOST = module.rds.endpoint
-        DB_PORT = "5432"
-        DB_NAME = "dashboard"
-        DB_USER = "appuser"
-        DB_PASS = "11111111"
+        SPRING_PROFILES_ACTIVE      = "dev"
+        SPRING_DATASOURCE_URL       = "jdbc:postgresql://${module.rds.endpoint}:5432/dashboard?sslmode=require"
+        SPRING_DATASOURCE_USERNAME  = "appuser"
+        SPRING_DATASOURCE_PASSWORD  = "11111111"
+        SERVER_PORT                 = "8081"
+        # (선택) JVM 메모리 튜닝: 작은 메모리에서 안정화
+        # JAVA_TOOL_OPTIONS           = "-XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=50 -XX:MaxMetaspaceSize=128m"
       }
     }
+
     exchange-service = {
       image          = "${local.ecr_repo_prefix}/exchange-service:latest"
       container_port = 8082
@@ -112,14 +114,15 @@ module "ecs" {
       cpu            = 256
       memory         = 512
       env = {
-        SPRING_PROFILES_ACTIVE = "dev"
-        DB_HOST = module.rds.endpoint
-        DB_PORT = "5432"
-        DB_NAME = "dashboard"
-        DB_USER = "appuser"
-        DB_PASS = "11111111"
+        SPRING_PROFILES_ACTIVE      = "dev"
+        SPRING_DATASOURCE_URL       = "jdbc:postgresql://${module.rds.endpoint}:5432/dashboard?sslmode=require"
+        SPRING_DATASOURCE_USERNAME  = "appuser"
+        SPRING_DATASOURCE_PASSWORD  = "11111111"
+        SERVER_PORT                 = "8082"
+        # JAVA_TOOL_OPTIONS           = "-XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=50 -XX:MaxMetaspaceSize=128m"
       }
     }
+
     weather-service = {
       image          = "${local.ecr_repo_prefix}/weather-service:latest"
       container_port = 8083
@@ -127,14 +130,15 @@ module "ecs" {
       cpu            = 256
       memory         = 512
       env = {
-        SPRING_PROFILES_ACTIVE = "dev"
-        DB_HOST = module.rds.endpoint
-        DB_PORT = "5432"
-        DB_NAME = "dashboard"
-        DB_USER = "appuser"
-        DB_PASS = "11111111"
+        SPRING_PROFILES_ACTIVE      = "dev"
+        SPRING_DATASOURCE_URL       = "jdbc:postgresql://${module.rds.endpoint}:5432/dashboard?sslmode=require"
+        SPRING_DATASOURCE_USERNAME  = "appuser"
+        SPRING_DATASOURCE_PASSWORD  = "11111111"
+        SERVER_PORT                 = "8083"
+        # JAVA_TOOL_OPTIONS           = "-XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=50 -XX:MaxMetaspaceSize=128m"
       }
     }
+
     news-service = {
       image          = "${local.ecr_repo_prefix}/news-service:latest"
       container_port = 8084
@@ -142,12 +146,12 @@ module "ecs" {
       cpu            = 256
       memory         = 512
       env = {
-        SPRING_PROFILES_ACTIVE = "dev"
-        DB_HOST = module.rds.endpoint
-        DB_PORT = "5432"
-        DB_NAME = "dashboard"
-        DB_USER = "appuser"
-        DB_PASS = "11111111"
+        SPRING_PROFILES_ACTIVE      = "dev"
+        SPRING_DATASOURCE_URL       = "jdbc:postgresql://${module.rds.endpoint}:5432/dashboard?sslmode=require"
+        SPRING_DATASOURCE_USERNAME  = "appuser"
+        SPRING_DATASOURCE_PASSWORD  = "11111111"
+        SERVER_PORT                 = "8084"
+        # JAVA_TOOL_OPTIONS           = "-XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=50 -XX:MaxMetaspaceSize=128m"
       }
     }
   }
@@ -161,7 +165,6 @@ module "ecs" {
 
   depends_on = [module.alb]
 }
-
 
 # ---------------- RDS(Postgres) ----------------
 module "rds" {
