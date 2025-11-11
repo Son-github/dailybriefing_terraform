@@ -2,7 +2,7 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 locals {
-  name_prefix = var.name_prefix
+  name_prefix    = var.name_prefix
   ecr_repo_prefix = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/dailybriefing"
 }
 
@@ -20,7 +20,7 @@ module "vpc" {
   public_a_cidr = "10.2.1.0/24"
   public_c_cidr = "10.2.11.0/24"
 
-  # ECS Private (2AZ)  👈 기존 ecs_cidr → ecs_a_cidr / ecs_c_cidr 로 분리
+  # ECS Private (2AZ)
   ecs_a_cidr = "10.2.2.0/24"
   ecs_c_cidr = "10.2.12.0/24"
 
@@ -28,16 +28,29 @@ module "vpc" {
   db_a_cidr = "10.2.3.0/24"
   db_c_cidr = "10.2.4.0/24"
 
-  # (옵션) 모듈 변수에 선언돼 있어야 함. 없다면 이 3개 줄은 지워도 됨.
-  enable_vpc_endpoints       = false
-  create_sg_bundle           = true
-  alb_ingress_cidrs          = ["0.0.0.0/0"]
+  # ✅ B안/프라이빗 Fargate 통신 확보(택1: VPC 엔드포인트 사용)
+  enable_vpc_endpoints = true
+  # 모듈에서 상세 플래그를 받는다면 아래도 켜줘
+  # vpc_endpoints = {
+  #   ecr_api = true
+  #   ecr_dkr = true
+  #   logs    = true
+  #   s3      = true
+  #   ssm     = true
+  # }
+
+  create_sg_bundle  = true
+  alb_ingress_cidrs = ["0.0.0.0/0"]
 
   # ALB → ECS 허용 포트
   ecs_ingress_from_alb_ports = [8081, 8082, 8083, 8084]
 
   # DB 포트
   db_port = 5432
+
+  # (택2: NAT GW 사용 시—모듈이 지원하면)
+  # enable_nat_gateway = true
+  # single_nat_gateway = true
 }
 
 # ---------------- ALB ----------------
@@ -55,22 +68,10 @@ module "alb" {
   access_logs_prefix = "alb/"
 
   routes = {
-    auth-service = {
-      path = "/api/auth/*"
-      port = 8081
-    }
-    exchange-service = {
-      path = "/api/exchange/*"
-      port = 8082
-    }
-    weather-service = {
-      path = "/api/weather/*"
-      port = 8083
-    }
-    news-service = {
-      path = "/api/news/*"
-      port = 8084
-    }
+    auth-service =     { path = "/api/auth/*",     port = 8081 }
+    exchange-service = { path = "/api/exchange/*", port = 8082 }
+    weather-service =  { path = "/api/weather/*",  port = 8083 }
+    news-service =     { path = "/api/news/*",     port = 8084 }
   }
 }
 
@@ -82,13 +83,12 @@ module "ecs" {
   cluster_name          = "${local.name_prefix}-cluster"
 
   vpc_id                = module.vpc.vpc_id
-  ecs_subnet_ids        = module.vpc.ecs_subnet_ids          # ✅ 2개 AZ 프라이빗 서브넷
+  ecs_subnet_ids        = module.vpc.ecs_subnet_ids
   ecs_security_group_id = module.vpc.ecs_sg_id
-  # db_sg_id는 VPC 모듈이 DB SG를 만들고 rule까지 관리하므로 굳이 전달 불필요
+  target_group_arns     = module.alb.target_group_arns
 
-  target_group_arns     = module.alb.target_group_arns       # {service = tg_arn}
-
-  # 4개 서비스 모두 DB 연결 ENV 추가
+  # (권장) 아래 secrets 주입은 모듈이 지원할 때 사용. 미지원이면 그대로 env 쓰고,
+  # 추후 모듈에 secrets(SSM/Secrets Manager) 전달 기능을 추가해.
   services = {
     auth-service = {
       image          = "${local.ecr_repo_prefix}/auth-service:latest"
@@ -97,14 +97,14 @@ module "ecs" {
       cpu            = 256
       memory         = 512
       env = {
-        SPRING_PROFILES_ACTIVE      = "dev"
-        SPRING_DATASOURCE_URL       = "jdbc:postgresql://${module.rds.endpoint}:5432/dashboard?sslmode=require"
-        SPRING_DATASOURCE_USERNAME  = "appuser"
-        SPRING_DATASOURCE_PASSWORD  = "11111111"
-        SERVER_PORT                 = "8081"
-        # (선택) JVM 메모리 튜닝: 작은 메모리에서 안정화
-        # JAVA_TOOL_OPTIONS           = "-XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=50 -XX:MaxMetaspaceSize=128m"
+        SPRING_PROFILES_ACTIVE = "dev"
+        SERVER_PORT            = "8081"
       }
+      # secrets = [
+      #   { name = "SPRING_DATASOURCE_URL",      valueFrom = aws_ssm_parameter.db_url.arn },
+      #   { name = "SPRING_DATASOURCE_USERNAME", valueFrom = aws_ssm_parameter.db_user.arn },
+      #   { name = "SPRING_DATASOURCE_PASSWORD", valueFrom = aws_ssm_parameter.db_pass.arn },
+      # ]
     }
 
     exchange-service = {
@@ -114,13 +114,10 @@ module "ecs" {
       cpu            = 256
       memory         = 512
       env = {
-        SPRING_PROFILES_ACTIVE      = "dev"
-        SPRING_DATASOURCE_URL       = "jdbc:postgresql://${module.rds.endpoint}:5432/dashboard?sslmode=require"
-        SPRING_DATASOURCE_USERNAME  = "appuser"
-        SPRING_DATASOURCE_PASSWORD  = "11111111"
-        SERVER_PORT                 = "8082"
-        # JAVA_TOOL_OPTIONS           = "-XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=50 -XX:MaxMetaspaceSize=128m"
+        SPRING_PROFILES_ACTIVE = "dev"
+        SERVER_PORT            = "8082"
       }
+      # secrets = [ ... (동일) ]
     }
 
     weather-service = {
@@ -130,13 +127,10 @@ module "ecs" {
       cpu            = 256
       memory         = 512
       env = {
-        SPRING_PROFILES_ACTIVE      = "dev"
-        SPRING_DATASOURCE_URL       = "jdbc:postgresql://${module.rds.endpoint}:5432/dashboard?sslmode=require"
-        SPRING_DATASOURCE_USERNAME  = "appuser"
-        SPRING_DATASOURCE_PASSWORD  = "11111111"
-        SERVER_PORT                 = "8083"
-        # JAVA_TOOL_OPTIONS           = "-XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=50 -XX:MaxMetaspaceSize=128m"
+        SPRING_PROFILES_ACTIVE = "dev"
+        SERVER_PORT            = "8083"
       }
+      # secrets = [ ... ]
     }
 
     news-service = {
@@ -146,13 +140,10 @@ module "ecs" {
       cpu            = 256
       memory         = 512
       env = {
-        SPRING_PROFILES_ACTIVE      = "dev"
-        SPRING_DATASOURCE_URL       = "jdbc:postgresql://${module.rds.endpoint}:5432/dashboard?sslmode=require"
-        SPRING_DATASOURCE_USERNAME  = "appuser"
-        SPRING_DATASOURCE_PASSWORD  = "11111111"
-        SERVER_PORT                 = "8084"
-        # JAVA_TOOL_OPTIONS           = "-XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=50 -XX:MaxMetaspaceSize=128m"
+        SPRING_PROFILES_ACTIVE = "dev"
+        SERVER_PORT            = "8084"
       }
+      # secrets = [ ... ]
     }
   }
 
@@ -176,7 +167,7 @@ module "rds" {
 
   db_name     = "dashboard"
   db_username = "appuser"
-  db_password = "11111111"   # dev only
+  db_password = "11111111"   # ✅ 추후 SSM/Secrets로 이동 권장
 
   instance_class          = "db.t4g.micro"
   allocated_storage       = 20
@@ -189,7 +180,7 @@ module "rds" {
   skip_final_snapshot     = true
 }
 
-# ---------------- Frontend ----------------
+# ---------------- Frontend (S3 + CloudFront OAC) ----------------
 module "s3_site" {
   source               = "../modules/s3_site"
   name                 = local.name_prefix
@@ -206,29 +197,15 @@ module "cloudfront" {
   s3_bucket_arn         = module.s3_site.bucket_arn
   s3_bucket_domain_name = module.s3_site.bucket_regional_domain_name
 
-  # CF 인증서(us-east-1) - 프론트 도메인(CloudFront)용
+  # CF 인증서(us-east-1)
   certificate_arn       = var.frontend_certificate_arn
   default_root_object   = "index.html"
   price_class           = "PriceClass_200"
 
-  # ✅ API 라우팅 (CloudFront → ALB: http-only)
-  enable_api_origin          = true
-  api_origin_domain_name     = module.alb.alb_dns_name
-  api_origin_protocol_policy = "http-only"
+  # ✅ B안: CloudFront가 API를 프록시하지 않음
+  enable_api_origin = false
 
-  # ✅ 프리플라이트/인증 헤더/쿠키/쿼리 전달
-  api_query_string      = true
-  api_forward_cookies   = "all"  # 세션/로그인 대응
-  api_forward_headers   = [
-    "Authorization",
-    "Origin",
-    "Content-Type",
-    "Accept",
-    "X-Requested-With"
-  ]
-
-  # ✅ API 캐시 끄기 (즉시 반영)
-  api_min_ttl     = 0
-  api_default_ttl = 0
-  api_max_ttl     = 0
+  # (권장) SPA 라우팅: 403/404 → /index.html로 리다이렉트 옵션이 모듈에 있다면 켜줘
+  # spa_redirect_403_to_index = true
+  # spa_redirect_404_to_index = true
 }
