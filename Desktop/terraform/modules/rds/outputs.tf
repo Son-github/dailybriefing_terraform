@@ -1,3 +1,1 @@
-output "endpoint" {
-  value = aws_db_instance.rds.address
-}
+output "db_address" { value = aws_db_instance.postgres.address }

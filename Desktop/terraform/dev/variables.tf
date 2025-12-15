@@ -1,28 +1,39 @@
-variable "name_prefix" {
-  description = "리소스 접두사"
-  type        = string
-  default     = "dailybriefing-dev"
+variable "name"   { type = string }
+
+variable "ecr_repo_prefix" { type = string } # 예: 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com
+
+variable "vpc_cidr"      { type = string }
+variable "public_a_cidr" { type = string }
+variable "public_c_cidr" { type = string }
+variable "ecs_a_cidr"    { type = string }
+variable "ecs_c_cidr"    { type = string }
+variable "db_a_cidr"     { type = string }
+variable "db_c_cidr"     { type = string }
+
+variable "az_a" { type = string }
+variable "az_c" { type = string }
+
+variable "alb_ingress_cidrs" { type = list(string), default = ["0.0.0.0/0"] }
+
+# 서비스 맵 (네가 준 구조를 정식화)
+variable "services" {
+  type = map(object({
+    container_port    = number
+    desired_count     = number
+    cpu               = number
+    memory            = number
+    path_prefix       = string        # 예: "/auth"
+    health_check_path = optional(string, "/actuator/health")
+    env               = optional(map(string), {})
+  }))
 }
 
-# 프런트(선택)
-variable "frontend_domain" {
-  type    = string
-  default = null
-}
+# DB
+variable "db_port" { type = number, default = 5432 }
+variable "db_engine_version" { type = string, default = "16.3" }
+variable "db_instance_class" { type = string, default = "db.t4g.micro" }
+variable "db_allocated_storage" { type = number, default = 20 }
 
-variable "frontend_hosted_zone_id" {
-  type    = string
-  default = null
-}
-
-variable "frontend_certificate_arn" {
-  type        = string
-  description = "CloudFront(us-east-1) 인증서 ARN"
-  default     = null
-}
-
-# ALB 인증서(선택; 없으면 80만 켜짐)
-variable "alb_certificate_arn" {
-  type    = string
-  default = null
-}
+variable "db_name"     { type = string, default = "appdb" }
+variable "db_username" { type = string, default = "appuser" }
+variable "db_password" { type = string, sensitive = true }
