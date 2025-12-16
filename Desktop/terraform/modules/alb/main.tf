@@ -11,7 +11,7 @@ resource "aws_lb_target_group" "tg" {
 
   # TG name 규칙: 32자 제한/허용문자 제한 때문에 정리
   name = substr(
-    regexreplace("${var.name}-${each.key}", "[^a-zA-Z0-9-]", "-"),
+    replace("${var.name}-${each.key}", "_", "-"),
     0,
     32
   )

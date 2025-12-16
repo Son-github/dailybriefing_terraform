@@ -19,9 +19,16 @@ variable "services" {
   }))
 }
 
-variable "common_env" { type = map(string), default = {} }
+variable "common_env" {
+  type = map(string)
+  default = {}
+}
 
-variable "enable_autoscaling" { type = bool, default = false }
+variable "enable_autoscaling" {
+  type = bool
+  default = false
+}
+
 variable "autoscaling" {
   type = object({
     min_capacity = number

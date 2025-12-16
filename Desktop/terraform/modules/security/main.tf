@@ -2,23 +2,54 @@ resource "aws_security_group" "alb" {
   name   = "${var.name}-alb-sg"
   vpc_id = var.vpc_id
 
-  ingress { from_port=80  to_port=80  protocol="tcp" cidr_blocks=var.alb_ingress_cidrs description="HTTP" }
-  ingress { from_port=443 to_port=443 protocol="tcp" cidr_blocks=var.alb_ingress_cidrs description="HTTPS" }
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = var.alb_ingress_cidrs
+    description = "HTTP"
+  }
 
-  egress { from_port=0 to_port=0 protocol="-1" cidr_blocks=["0.0.0.0/0"] }
-  tags = { Name = "${var.name}-alb-sg" }
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = var.alb_ingress_cidrs
+    description = "HTTPS"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.name}-alb-sg"
+  }
 }
 
 resource "aws_security_group" "ecs" {
   name   = "${var.name}-ecs-sg"
   vpc_id = var.vpc_id
 
-  egress { from_port=0 to_port=0 protocol="-1" cidr_blocks=["0.0.0.0/0"] }
-  tags = { Name = "${var.name}-ecs-sg" }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.name}-ecs-sg"
+  }
 }
 
 resource "aws_security_group_rule" "ecs_from_alb" {
-  for_each = { for p in var.ecs_from_alb_ports : tostring(p) => p }
+  for_each = {
+    for p in var.ecs_from_alb_ports : tostring(p) => p
+  }
 
   type                     = "ingress"
   from_port                = each.value
@@ -33,8 +64,16 @@ resource "aws_security_group" "db" {
   name   = "${var.name}-db-sg"
   vpc_id = var.vpc_id
 
-  egress { from_port=0 to_port=0 protocol="-1" cidr_blocks=["0.0.0.0/0"] }
-  tags = { Name = "${var.name}-db-sg" }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.name}-db-sg"
+  }
 }
 
 resource "aws_security_group_rule" "db_from_ecs" {
@@ -46,4 +85,3 @@ resource "aws_security_group_rule" "db_from_ecs" {
   source_security_group_id = aws_security_group.ecs.id
   description              = "ECS to DB"
 }
-

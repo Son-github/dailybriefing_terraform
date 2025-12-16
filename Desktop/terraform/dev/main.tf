@@ -7,7 +7,7 @@ locals {
 }
 
 module "vpc" {
-  source = "/modules/vpc"
+  source = "../modules/vpc"
 
   name      = local.name_prefix
   vpc_cidr  = var.vpc_cidr
@@ -24,7 +24,7 @@ module "vpc" {
 }
 
 module "security" {
-  source = "/modules/security"
+  source = "../modules/security"
   name              = local.name_prefix
   vpc_id            = module.vpc.vpc_id
   alb_ingress_cidrs = var.alb_ingress_cidrs
@@ -44,7 +44,7 @@ locals {
 }
 
 module "alb" {
-  source = "/modules/alb"
+  source = "../modules/alb"
 
   name              = local.name_prefix
   vpc_id            = module.vpc.vpc_id
@@ -55,13 +55,12 @@ module "alb" {
 }
 
 module "rds" {
-  source = "/modules/rds"
+  source = "../modules/rds"
 
   name          = local.name_prefix
   db_subnet_ids = module.vpc.db_subnet_ids
   db_sg_id      = module.security.db_sg_id
 
-  db_engine_version    = var.db_engine_version
   db_instance_class    = var.db_instance_class
   db_allocated_storage = var.db_allocated_storage
 
@@ -72,7 +71,7 @@ module "rds" {
 }
 
 module "ecs" {
-  source = "/modules/ecs"
+  source = "../modules/ecs"
 
   name         = local.name_prefix
   cluster_name = "${local.name_prefix}-cluster"
@@ -107,4 +106,11 @@ module "ecs" {
 
   depends_on = [module.alb, module.rds]
 }
+
+module "frontend" {
+  source = "../modules/frontend"
+
+  name = local.name_prefix
+}
+
 
