@@ -21,3 +21,7 @@ output "frontend_url" {
 output "cloudfront_distribution_id" {
   value = module.frontend.cloudfront_distribution_id
 }
+
+output "ecs_cluster_id" {
+  value = module.ecs.cluster_id
+}

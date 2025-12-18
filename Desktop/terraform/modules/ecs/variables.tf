@@ -41,3 +41,10 @@ variable "autoscaling" {
     target_cpu   = 60
   }
 }
+
+variable "common_secrets" {
+  description = "Map of ENV_NAME => Secrets Manager secret name"
+  type        = map(string)
+  default     = {}
+}
+

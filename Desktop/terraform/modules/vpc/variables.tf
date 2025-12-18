@@ -11,3 +11,8 @@ variable "ecs_c_cidr"    { type = string }
 variable "db_a_cidr"     { type = string }
 variable "db_c_cidr"     { type = string }
 
+variable "enable_nat_gateway" {
+  type = bool
+  default = true
+}
+

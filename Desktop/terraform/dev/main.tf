@@ -21,6 +21,8 @@ module "vpc" {
   ecs_c_cidr    = var.ecs_c_cidr
   db_a_cidr     = var.db_a_cidr
   db_c_cidr     = var.db_c_cidr
+
+  enable_nat_gateway = true
 }
 
 module "security" {
@@ -95,6 +97,13 @@ module "ecs" {
     SPRING_DATASOURCE_URL      = "jdbc:postgresql://${module.rds.db_address}:${var.db_port}/${var.db_name}"
     SPRING_DATASOURCE_USERNAME = var.db_username
     SPRING_DATASOURCE_PASSWORD = var.db_password
+
+    # ✅ 자동: CloudFront 도메인 사용
+    APP_CORS_ALLOWED_ORIGINS = "https://${module.frontend.cloudfront_domain_name}"
+  }
+
+  common_secrets = {
+    JWT_SECRET = "/dailybriefing/jwt/secret"
   }
 
   enable_autoscaling = false
