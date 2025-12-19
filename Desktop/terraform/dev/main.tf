@@ -9,8 +9,8 @@ locals {
 module "vpc" {
   source = "../modules/vpc"
 
-  name      = local.name_prefix
-  vpc_cidr  = var.vpc_cidr
+  name     = local.name_prefix
+  vpc_cidr = var.vpc_cidr
 
   az_a = var.az_a
   az_c = var.az_c
@@ -26,7 +26,7 @@ module "vpc" {
 }
 
 module "security" {
-  source = "../modules/security"
+  source            = "../modules/security"
   name              = local.name_prefix
   vpc_id            = module.vpc.vpc_id
   alb_ingress_cidrs = var.alb_ingress_cidrs
@@ -40,7 +40,7 @@ locals {
     for k, v in var.services : k => {
       container_port    = v.container_port
       path_prefix       = v.path_prefix
-      health_check_path = try(v.health_check_path, "/actuator/health")
+      health_check_path = try(v.health_check_path, "${v.path_prefix}/actuator/health")
     }
   }
 }

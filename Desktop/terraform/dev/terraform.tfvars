@@ -1,4 +1,4 @@
-name = "dailybriefing"
+name            = "dailybriefing"
 ecr_repo_prefix = "953013523670.dkr.ecr.ap-northeast-2.amazonaws.com/dailybriefing"
 
 az_a = "ap-northeast-2a"
@@ -21,8 +21,9 @@ services = {
     cpu            = 256
     memory         = 512
     path_prefix    = "/auth"
+    health_check_path = "/auth/actuator/health"
     env = {
-      SPRING_PROFILES_ACTIVE = "dev"
+      # SPRING_PROFILES_ACTIVE = "dev"
       SERVER_PORT            = "8081"
     }
   }
